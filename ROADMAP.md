@@ -14,7 +14,7 @@
 - [x] Implement 3D unit gravity vector normalization (mg to unit length).
 - [x] Build one-touch Tare / Zero routine.
 - [x] Dual-mode auto-switch: Wall Drilling (upright 90°) vs Bench Leveling (horizontal).
-- [x] Add WiFiManager captive portal AP setup (`Bullseye-Setup`) to eliminate hardcoded Wi-Fi.
+- [ ] Captive portal AP setup (Omitted - streamlined for lightweight direct station/OTA Wi-Fi).
 - [x] Enable QMI8658 hardware silicon digital low-pass filter (0x55 on CTRL5).
 - [x] Implement 6-Axis Complementary Sensor Fusion (fusing Gyro angular rates with Accel gravity).
 
@@ -23,8 +23,8 @@
 - [x] Digital Bullseye Bubble Level with mineral spirit fluid viscosity damping.
 - [x] Target Angle Presets (0°, 15°, 30°, 45°) with bevel icon button.
 - [x] Touch interactions (center tap to tare, top-right tap to cycle preset).
-- [x] Hardware power button handling (GPIO 0: short press cycles presets, long press enters sleep).
-- [x] Automatic battery power management (auto-dim at 60s, deep sleep at 3 mins, wake on touch/button).
+- [ ] Hardware power button handling on GPIO 0 (Omitted - using on-screen touch gestures and physical LiPo power switch).
+- [x] Automatic battery power management (auto-dim at 60s, deep sleep at 2 mins, zero-backlight standby, wake on touch/motion).
 
 ## Phase 4: Enclosure & Tool Mounting
 - [x] Design 3D printable circular puck enclosure in SolidCraft CAD (`bullseye.sc`).

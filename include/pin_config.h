@@ -26,7 +26,6 @@
 
 // --- Power & System ---
 #define PIN_BATTERY_ADC     1
-#define PIN_BOOT_BUTTON     0
 
 // Display dimensions
 #define LCD_WIDTH         240

@@ -1,17 +1,10 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
-#include <WiFi.h>
-#include <ArduinoOTA.h>
-#include <WiFiManager.h>
+#include <esp_wifi.h>
+#include <esp_bt.h>
 #include <QMI8658.h>
 #include "pin_config.h"
-#if __has_include("wifi_config.h")
-#include "wifi_config.h"
-#endif
-#ifndef OTA_HOSTNAME
-#define OTA_HOSTNAME "bullseye"
-#endif
 #include "logo_data.h"
 #include "LGFX_ESP32S3_GC9A01.h"
 
@@ -32,7 +25,6 @@ constexpr int BTN_PRESET_RADIUS = 12;
 LGFX_Waveshare128 lcd;
 LGFX_Sprite canvas(&lcd);
 QMI8658 qmi;
-WiFiManager wm;
 
 // Sensor & System Status
 bool imuOk = false;
@@ -55,6 +47,7 @@ float gyroBiasY = 0.0f;
 float gyroBiasZ = 0.0f;
 float fusedRoll = 0.0f;
 float fusedPitch = 0.0f;
+bool fusionInitialized = false;
 
 // Tare offsets (in g's)
 float tareX = 0.0f;
@@ -67,28 +60,31 @@ const float TARGET_PRESETS[] = { 0.0f, 15.0f, 30.0f, 45.0f };
 const int NUM_PRESETS = sizeof(TARGET_PRESETS) / sizeof(TARGET_PRESETS[0]);
 int currentPresetIdx = 0; // 0 = 0.0° (Level / Plumb)
 
-// OTA status
-bool isUpdatingOTA = false;
-int otaProgress = 0;
-
 float readBatteryVoltage() {
     uint32_t mv = analogReadMilliVolts(PIN_BATTERY_ADC);
     return (mv * 2.0f) / 1000.0f;
 }
 
 int getBatteryPercent(float v) {
-    if (v >= 4.15f) return 100;
+    if (v >= 4.18f) return 100;
     if (v <= 3.30f) return 0;
-    return (int)((v - 3.30f) / (4.15f - 3.30f) * 100.0f);
+    // Piecewise LiPo discharge curve
+    if (v >= 4.00f) return 85 + (int)((v - 4.00f) / 0.18f * 15.0f);
+    if (v >= 3.85f) return 60 + (int)((v - 3.85f) / 0.15f * 25.0f);
+    if (v >= 3.75f) return 40 + (int)((v - 3.75f) / 0.10f * 20.0f);
+    if (v >= 3.65f) return 20 + (int)((v - 3.65f) / 0.10f * 20.0f);
+    if (v >= 3.50f) return 10 + (int)((v - 3.50f) / 0.15f * 10.0f);
+    return (int)((v - 3.30f) / 0.20f * 10.0f);
 }
 
 void enterStandby() {
     isStandby = true;
     canvas.fillScreen(TFT_BLACK);
     canvas.pushSprite(0, 0);
+    lcd.setBrightness(0); // Cut PWM backlight to 0 to prevent battery drain!
     lcd.sleep();
     setCpuFrequencyMhz(80); // Drop CPU clock to save battery power
-    Serial.println("[Power] Standby mode activated: Display OFF, Touch & Motion active.");
+    Serial.println("[Power] Standby mode activated: Backlight OFF, Display Sleep, Touch & Motion active.");
 }
 
 void wakeFromStandby() {
@@ -101,92 +97,18 @@ void wakeFromStandby() {
     Serial.println("[Power] Woke from Standby mode!");
 }
 
-void setupNetwork() {
-    WiFi.mode(WIFI_STA);
-    WiFi.setSleep(true); // Enable 802.11 Modem Sleep: saves ~85% Wi-Fi idle power while keeping OTA active
-    WiFi.setAutoReconnect(true);
-
-    #ifdef WIFI_SSID
-    Serial.printf("[WiFi] Connecting to %s...\n", WIFI_SSID);
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-    unsigned long start = millis();
-    while (WiFi.status() != WL_CONNECTED && millis() - start < 4500) {
-        delay(150);
-        Serial.print(".");
-    }
-    #endif
-
-    if (WiFi.status() == WL_CONNECTED) {
-        Serial.printf("\n[WiFi] Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-    } else {
-        Serial.println("\n[WiFi] Offline mode. Spirit level running immediately.");
-    }
-
-    ArduinoOTA.setHostname(OTA_HOSTNAME);
-
-    ArduinoOTA.onStart([]() {
-        isUpdatingOTA = true;
-        canvas.fillScreen(TFT_BLACK);
-        canvas.setTextColor(TFT_WHITE);
-        canvas.setTextDatum(textdatum_t::middle_center);
-        canvas.drawString("Bullseye OTA", CENTER_X, 90, &fonts::Font4);
-        canvas.drawString("Updating Firmware...", CENTER_X, 125, &fonts::Font2);
-        canvas.pushSprite(0, 0);
-        Serial.println("[OTA] Update started.");
-    });
-
-    ArduinoOTA.onEnd([]() {
-        canvas.fillScreen(TFT_BLACK);
-        canvas.setTextColor(TFT_GREEN);
-        canvas.setTextDatum(textdatum_t::middle_center);
-        canvas.drawString("Update Complete!", CENTER_X, 110, &fonts::Font4);
-        canvas.drawString("Rebooting...", CENTER_X, 145, &fonts::Font2);
-        canvas.pushSprite(0, 0);
-        Serial.println("[OTA] Update complete. Rebooting.");
-    });
-
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
-        otaProgress = (total > 0) ? (int)(100.0f * progress / total) : 0;
-        
-        canvas.fillScreen(TFT_BLACK);
-        canvas.setTextColor(TFT_CYAN);
-        canvas.setTextDatum(textdatum_t::middle_center);
-        canvas.drawString("Flashing Wireless...", CENTER_X, 85, &fonts::Font2);
-        
-        char pctStr[16];
-        snprintf(pctStr, sizeof(pctStr), "%d%%", otaProgress);
-        canvas.drawString(pctStr, CENTER_X, 120, &fonts::Font4);
-
-        canvas.drawRect(40, 150, 160, 14, TFT_WHITE);
-        int barW = (int)(156.0f * (otaProgress / 100.0f));
-        canvas.fillRect(42, 152, barW, 10, TFT_GREEN);
-        canvas.pushSprite(0, 0);
-    });
-
-    ArduinoOTA.onError([](ota_error_t error) {
-        const char* errDesc = "Unknown Error";
-        if (error == OTA_AUTH_ERROR) errDesc = "Auth Failed";
-        else if (error == OTA_BEGIN_ERROR) errDesc = "Begin Failed";
-        else if (error == OTA_CONNECT_ERROR) errDesc = "Connect Failed";
-        else if (error == OTA_RECEIVE_ERROR) errDesc = "Receive Failed";
-        else if (error == OTA_END_ERROR) errDesc = "End Failed";
-
-        Serial.printf("[OTA] Error[%u]: %s\n", error, errDesc);
-        isUpdatingOTA = false;
-    });
-
-    ArduinoOTA.begin();
-    Serial.println("[OTA] ArduinoOTA service initialized.");
-}
-
 void setup() {
     Serial.begin(115200);
     pinMode(PIN_TOUCH_INT, INPUT_PULLUP);
     pinMode(PIN_BATTERY_ADC, INPUT);
-    delay(200);
+
+    // Disable all RF radios (Wi-Fi & Bluetooth) to maximize LiPo battery life (~10-12 hours)
+    esp_wifi_stop();
+    esp_wifi_deinit();
 
     Serial.println("\n========================================");
-    Serial.println("              Bullseye Smart Level      ");
+    Serial.println("         Bullseye Smart Level           ");
+    Serial.println("   Standalone Precision Angle Guide     ");
     Serial.println("========================================");
 
     // 1. Initialize LCD Display
@@ -207,20 +129,10 @@ void setup() {
     canvas.setTextColor(TFT_WHITE);
     canvas.drawString("Bullseye", CENTER_X, 196, &fonts::Font2);
     canvas.setTextColor(TFT_CYAN);
-    canvas.drawString("Connecting & Calibrating...", CENTER_X, 218, &fonts::Font0);
+    canvas.drawString("Calibrating IMU...", CENTER_X, 218, &fonts::Font0);
     canvas.pushSprite(0, 0);
 
-    // 3. Setup Wi-Fi & OTA
-    setupNetwork();
-
-    if (WiFi.status() == WL_CONNECTED) {
-        canvas.fillRect(20, 210, 200, 20, TFT_BLACK);
-        canvas.setTextColor(TFT_GREEN);
-        canvas.drawString(WiFi.localIP().toString().c_str(), CENTER_X, 218, &fonts::Font0);
-        canvas.pushSprite(0, 0);
-    }
-
-    // 4. Initialize Shared I2C Bus & QMI8658 6-Axis IMU
+    // 3. Initialize Shared I2C Bus & QMI8658 6-Axis IMU
     Wire.begin(PIN_I2C_SDA, PIN_I2C_SCL, 400000);
     imuOk = qmi.begin(Wire, QMI8658_ADDRESS_HIGH);
     if (!imuOk) imuOk = qmi.begin(Wire, QMI8658_ADDRESS_LOW);
@@ -248,9 +160,10 @@ void setup() {
             Wire.endTransmission();
         }
 
-        // Quick stationary gyro bias sampling (20 readings)
+        // Stationary gyro bias sampling (100 readings across 500ms)
         float sumGx = 0, sumGy = 0, sumGz = 0;
-        for (int i = 0; i < 20; i++) {
+        constexpr int CALIB_SAMPLES = 100;
+        for (int i = 0; i < CALIB_SAMPLES; i++) {
             float gx = 0, gy = 0, gz = 0;
             qmi.readGyroDPS(gx, gy, gz);
             sumGx += gx;
@@ -258,9 +171,9 @@ void setup() {
             sumGz += gz;
             delay(5);
         }
-        gyroBiasX = sumGx / 20.0f;
-        gyroBiasY = sumGy / 20.0f;
-        gyroBiasZ = sumGz / 20.0f;
+        gyroBiasX = sumGx / (float)CALIB_SAMPLES;
+        gyroBiasY = sumGy / (float)CALIB_SAMPLES;
+        gyroBiasZ = sumGz / (float)CALIB_SAMPLES;
 
         Serial.printf("[IMU] QMI8658 6-Axis online. Hardware LPF 0x55 active. Gyro bias: (%.2f, %.2f, %.2f) dps\n",
                       gyroBiasX, gyroBiasY, gyroBiasZ);
@@ -273,10 +186,6 @@ void setup() {
 }
 
 void loop() {
-    // 1. Background OTA requests
-    ArduinoOTA.handle();
-    if (isUpdatingOTA) return;
-
     static unsigned long lastUpdate = 0;
     static unsigned long lastSerial = 0;
     static unsigned long lastSensor = 0;
@@ -293,7 +202,6 @@ void loop() {
     // If in Standby: poll touch and motion at low rate (every 50ms) to save battery
     if (isStandby) {
         delay(50);
-        ArduinoOTA.handle();
 
         int32_t tx = 0, ty = 0;
         if (lcd.getTouch(&tx, &ty)) {
@@ -394,13 +302,20 @@ void loop() {
     }
 
     // 3. 3D Tilt Calculation & Smart Mode Auto-Switch with Hysteresis
+    // On the Waveshare ESP32-S3-Touch-LCD-1.28 hardware, the QMI8658 chip has its X-axis
+    // aligned with the upright screen vertical axis. When upright (Wall Drill mode), |fx| > 0.60.
+    // When flat on a table (Bench mode), |fz| > 0.60.
     if (isVerticalWallMode) {
-        if (abs(fz) > 0.65f && abs(fx) < 0.65f) {
+        if (abs(fz) > 0.60f && abs(fx) < 0.60f) {
             isVerticalWallMode = false;
+            fusionInitialized = false;
+            Serial.println("[Mode] Switched to BENCH / DESK LEVEL");
         }
     } else {
-        if (abs(fx) > 0.65f && abs(fz) < 0.65f) {
+        if (abs(fx) > 0.60f && abs(fz) < 0.60f) {
             isVerticalWallMode = true;
+            fusionInitialized = false;
+            Serial.println("[Mode] Switched to WALL DRILL");
         }
     }
 
@@ -409,19 +324,15 @@ void loop() {
     float totalTilt = 0.0f;
 
     if (isTared) {
-        float dot = fx * tareX + fy * tareY + fz * tareZ;
-        totalTilt = acos(constrain(dot, -1.0f, 1.0f)) * (180.0f / M_PI);
+        // True 3D relative angle between tare gravity reference and current gravity vector
+        float dot = constrain(fx * tareX + fy * tareY + fz * tareZ, -1.0f, 1.0f);
+        totalTilt = acos(dot) * (180.0f / M_PI);
 
-        float dx = fx - tareX;
-        float dy = fy - tareY;
-        float dz = fz - tareZ;
-
-        accelRoll_deg = asin(constrain(-dy, -1.0f, 1.0f)) * (180.0f / M_PI);
-        if (isVerticalWallMode) {
-            accelPitch_deg = asin(constrain(-dz, -1.0f, 1.0f)) * (180.0f / M_PI);
-        } else {
-            accelPitch_deg = asin(constrain(dx, -1.0f, 1.0f)) * (180.0f / M_PI);
-        }
+        // Cross-product (tare x current) gives exact relative rotation axis and sine-projections
+        float cx = tareY * fz - tareZ * fy;
+        float cy = tareZ * fx - tareX * fz;
+        accelRoll_deg = asin(constrain(cx, -1.0f, 1.0f)) * (180.0f / M_PI);
+        accelPitch_deg = asin(constrain(cy, -1.0f, 1.0f)) * (180.0f / M_PI);
     } else {
         if (isVerticalWallMode) {
             accelRoll_deg = asin(constrain(-fy, -1.0f, 1.0f)) * (180.0f / M_PI);
@@ -434,8 +345,24 @@ void loop() {
         }
     }
 
-    float roll_deg = accelRoll_deg;
-    float pitch_deg = accelPitch_deg;
+    // 6-Axis Complementary Filter:
+    // Fuses gyro angular rate with accelerometer tilt. During drill vibration (isVibrating),
+    // gyro weight increases to 0.98 to reject high-frequency mechanical shock.
+    if (!fusionInitialized) {
+        fusedRoll = accelRoll_deg;
+        fusedPitch = accelPitch_deg;
+        fusionInitialized = true;
+    } else {
+        float dt = (now - lastSensor < 50) ? (now - lastSensor) / 1000.0f : 0.010f;
+        float alphaGyro = isVibrating ? 0.98f : 0.94f;
+        float rateRoll = gyroDPS_X;
+        float ratePitch = isVerticalWallMode ? gyroDPS_Z : gyroDPS_Y;
+        fusedRoll = alphaGyro * (fusedRoll + rateRoll * dt) + (1.0f - alphaGyro) * accelRoll_deg;
+        fusedPitch = alphaGyro * (fusedPitch + ratePitch * dt) + (1.0f - alphaGyro) * accelPitch_deg;
+    }
+
+    float roll_deg = fusedRoll;
+    float pitch_deg = fusedPitch;
 
     // 4. Touch Gestures:
     // Top-right button: Cycle Target Presets
@@ -469,11 +396,13 @@ void loop() {
             if (lastTouchX > 135 && lastTouchY < 75) {
                 currentPresetIdx = (currentPresetIdx + 1) % NUM_PRESETS;
                 isTared = false;
+                fusionInitialized = false;
                 Serial.printf("[Touch] Preset cycled to: %.1f deg\n", TARGET_PRESETS[currentPresetIdx]);
             } else {
                 if (isTared) {
                     isTared = false;
                     tareX = tareY = tareZ = 0.0f;
+                    fusionInitialized = false;
                     Serial.println("[Touch] Tare cleared -> AUTO MODE.");
                 } else {
                     float tareMag = sqrt(fx * fx + fy * fy + fz * fz);
@@ -482,6 +411,7 @@ void loop() {
                         tareX = fx;
                         tareY = fy;
                         tareZ = fz;
+                        fusionInitialized = false;
                         Serial.printf("[Touch] Tared to: (%.2f, %.2f, %.2f) | mag: %.2f\n", tareX, tareY, tareZ, tareMag);
                     } else {
                         Serial.printf("[Touch] Tare rejected: invalid gravity vector mag (%.2f)\n", tareMag);
@@ -593,15 +523,6 @@ void loop() {
             canvas.drawString("⚡ VIB DAMP", CENTER_X, 43, &fonts::Font0);
         }
 
-        // Wi-Fi Connection Dot at Top Left (42, 38)
-        if (WiFi.status() == WL_CONNECTED) {
-            canvas.fillCircle(42, 38, 4, TFT_GREEN);
-        } else if (wm.getConfigPortalActive()) {
-            canvas.fillCircle(42, 38, 4, TFT_ORANGE);
-        } else {
-            canvas.drawCircle(42, 38, 4, TFT_DARKGRAY);
-        }
-
         // Top-Right Preset Button with Bevel Icon ⊿
         uint16_t btnBg = (targetAngle > 0.0f) ? 
                          (evalTolerance < 0.5f ? canvas.color565(0, 125, 55) : canvas.color565(60, 35, 90)) : 
@@ -668,10 +589,9 @@ void loop() {
     // Telemetry output over serial (1 Hz)
     if (now - lastSerial >= 1000) {
         lastSerial = now;
-        Serial.printf("[Tele] Tilt: %5.1f deg | Roll: %+5.1f deg | Pitch: %+5.1f deg | Vib: %s | Dim: %s | Mode: %s\n",
+        Serial.printf("[Tele] Tilt: %5.1f deg | Roll: %+5.1f deg | Pitch: %+5.1f deg | fx:%+.2f fy:%+.2f fz:%+.2f | Mode: %s\n",
                       totalTilt, roll_deg, pitch_deg,
-                      isVibrating ? "YES" : "NO",
-                      isDisplayDimmed ? "YES" : "NO",
+                      fx, fy, fz,
                       isTared ? "TARE" : (isVerticalWallMode ? "WALL" : "BENCH"));
     }
 }
