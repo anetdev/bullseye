@@ -1,0 +1,9 @@
+#pragma once
+
+// Optional Wi-Fi credentials for over-the-air (OTA) updates.
+// To enable Wi-Fi & OTA, copy this file to "wifi_config.h" and enter your credentials.
+// Bullseye operates 100% offline if this file is omitted.
+
+#define WIFI_SSID     "YOUR_WIFI_SSID"
+#define WIFI_PASSWORD "YOUR_WIFI_PASSWORD"
+#define OTA_HOSTNAME  "bullseye"

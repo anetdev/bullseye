@@ -1,0 +1,9 @@
+.pio/
+.vscode/
+*.bin
+*.elf
+*.lock
+include/wifi_config.h
+*secrets*
+*.bak
+compile_commands.json
