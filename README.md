@@ -27,10 +27,10 @@ All components are unified into a single parametric model in **SolidCraft** ([`b
 
 | File | Part | Description | Print Time / Settings |
 | :--- | :--- | :--- | :--- |
-| **[`bullseye-full-plate.stl`](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount, Front Case with Switch Slot, Rear Lid). | 0.2mm layer, 3-4 walls, 20% infill. |
-| **[`bullseye-puck-front.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 44 mm body, 33 mm screen retention window, 37.2 mm internal bore, USB-C slot, 9×5mm power switch slot. | Print face-down on build plate. |
-| **[`bullseye-puck-back.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Rear Magnetic Lid | 40.8 mm snap lid with 4x 10.3mm magnet pockets and pry notch. | Print flat on build plate. |
-| **[`bullseye-mount.stl`](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 44.4 mm anti-shear collar, 4 matching magnet pockets, 20 mm strap loops. | Print flat on build plate. |
+| **[`bullseye-full-plate.stl`](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount, Front Case with Switch Slot, Rear Lid). | 0.32mm layer (0.8mm nozzle) or 0.2mm (0.4mm nozzle). |
+| **[`bullseye-puck-front.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 44 mm body, 33 mm window, 38.4 mm bore, rear-entry USB-C channel, switch slot. | Print face-down on build plate. |
+| **[`bullseye-puck-back.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Rear Magnetic Lid | 40.4 mm snap lid into 41.4 mm recess with 4x 10.6mm magnet pockets and pry notch. | Print flat on build plate. |
+| **[`bullseye-mount.stl`](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 45.0 mm cradle collar, 4x 10.6mm magnet pockets, 4.5 mm wide strap slots. | Print flat on build plate. |
 
 ---
 
