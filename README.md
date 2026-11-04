@@ -28,9 +28,9 @@ All components are unified into a single parametric model in **SolidCraft** ([`b
 | File | Part | Description | Print Time / Settings |
 | :--- | :--- | :--- | :--- |
 | **[`bullseye-full-plate.stl`](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount, Front Case with Switch Slot, Rear Lid). | 0.32mm layer (0.8mm nozzle) or 0.2mm (0.4mm nozzle). |
-| **[`bullseye-puck-front.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 44 mm body, 33 mm window, 38.4 mm bore, rear-entry USB-C channel, switch slot. | Print face-down on build plate. |
-| **[`bullseye-puck-back.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Rear Magnetic Lid | 40.4 mm snap lid into 41.4 mm recess with 4x 10.3mm magnet pockets and pry notch. | Print flat on build plate. |
-| **[`bullseye-mount.stl`](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 45.0 mm cradle collar, 4x 10.3mm magnet pockets, 4.5 mm wide strap slots. | Print flat on build plate. |
+| **[`bullseye-puck-front.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 54 mm body, 20 mm depth, 33 mm window, 38.4 mm screen seat, 48.6 mm battery chamber (fits 41×21×8mm pack), rear USB-C channel. | Print face-down on build plate. |
+| **[`bullseye-puck-back.stl`](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Rear Magnetic Lid | 49.8 mm snap lid into 50.8 mm recess with 4x 10.3mm magnet pockets and pry notch. | Print flat on build plate. |
+| **[`bullseye-mount.stl`](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 55.0 mm cradle collar (for 54mm puck), 4x 10.3mm magnet pockets, 4.5 mm wide strap slots. | Print flat on build plate. |
 
 ---
 
