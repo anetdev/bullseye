@@ -27,10 +27,10 @@ All components are unified into a single parametric model in **SolidCraft** ([`b
 
 | File | Part | Description | Print Time / Settings |
 | :--- | :--- | :--- | :--- |
-| **[`bullseye-full-plate.stl](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount, Front Case with Switch Slot, Rear Lid). | 0.20mm layer height (0.4mm nozzle), 3–4 walls, 20% infill. |
-| **[`bullseye-puck-front.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 54 mm body, 20 mm depth, 33.6 mm window (matches 33.4mm VA), 39.0 mm glass bore (matches 38.51mm glass), 26.6 mm chin slot (matches 25.28mm teardrop chin), 48.6 mm battery chamber (fits 41x21x8mm pack). | Print face-down on build plate. |
-| **[`bullseye-puck-back.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Rear Magnetic Lid | 50.4 mm snap lid into 50.8 mm recess (crisp 0.4mm clearance snap fit), 4x 10.2mm magnet pockets (firm press-fit), pry notch. | Print flat on build plate. |
-| **[`bullseye-mount.stl](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 54.6 mm cradle collar (smooth 0.3mm radial docking for 54mm puck), 4x 10.2mm magnet pockets, 4.5 mm wide strap slots. | Print flat on build plate. |
+| **[ullseye-full-plate.stl](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount with 6x magnets, Front Case with 3-lug bayonet track, Twist-Lock Rear Lid with 6x magnets). | 0.20mm layer height (0.4mm nozzle), 3–4 walls, 20% infill. |
+| **[ullseye-puck-front.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 54 mm body, 20 mm depth, 33.6 mm window (matches 33.4mm VA), 39.0 mm glass bore, 26.6 mm chin slot, 48.6 mm battery bay, 3-entry twist-lock bayonet track. | Print face-down on build plate. |
+| **[ullseye-puck-back.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Twist-Lock Rear Lid | 48.4 mm bayonet lid with 3x locking lugs (60-deg twist-lock with solid stop), coin/thumb twist slot, 6x 10.2mm magnet pockets. | Print flat on build plate. |
+| **[ullseye-mount.stl](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 54.6 mm cradle collar (smooth 0.3mm radial docking for 54mm puck), 6x 10.2mm magnet pockets at 60-deg spacing, 4.5 mm wide strap slots. | Print flat on build plate. |
 
 ---
 
@@ -40,7 +40,7 @@ All components are unified into a single parametric model in **SolidCraft** ([`b
 | **Main Puck Board** | Waveshare ESP32-S3-Touch-LCD-1.28 (ESP32-S3R2, 1.28" GC9A01 IPS LCD, CST816S touch, QMI8658 6-axis IMU) | ~$20 – $29 |
 | **Battery** | 3.7V 400mAh – 500mAh LiPo pouch battery (size 502535 with 1.25mm 2-pin JST) | ~$3 – $5 |
 | **Power Switch** | Micro slide switch (SS-12D00 / SS-12F15) inline with battery positive lead | ~$0.50 |
-| **Magnets** | 4x (or 8x) 10x2mm Neodymium disc magnets (e.g., LM10x2-100P) | ~$2 |
+| **Magnets** | 12x 10x2mm Neodymium disc magnets (6 for puck lid + 6 for drill mount plate) | ~ |
 | **Filament** | PETG or Tough PLA | ~$1 |
 
 ---
