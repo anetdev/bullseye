@@ -22,15 +22,19 @@
 
 ---
 
-## 3D Printable STL Files (Parametric Assembly)
-All components are unified into a single parametric model in **SolidCraft** ([`bullseye.sc`](file:///D:/gemini/Projects/bullseye/bullseye.sc)). You can print the full plate or individual parts:
+## 3D CAD & Enclosure Design
+The primary canonical enclosure is modeled in **Autodesk Fusion 360** and distributed as a universal STEP assembly:
 
-| File | Part | Description | Print Time / Settings |
-| :--- | :--- | :--- | :--- |
-| **[ullseye-full-plate.stl](file:///D:/gemini/Projects/bullseye/bullseye-full-plate.stl)** | **Complete Print Plate** | All 3 parts arranged on a single build plate (Drill Mount with 6x magnets, Front Case with 3-lug bayonet track, Twist-Lock Rear Lid with 6x magnets). | 0.20mm layer height (0.4mm nozzle), 3–4 walls, 20% infill. |
-| **[ullseye-puck-front.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-front.stl)** | Front Bezel & Body | 54 mm body, 20 mm depth, 33.6 mm window (matches 33.4mm VA), 39.0 mm glass bore, 26.6 mm chin slot, 48.6 mm battery bay, 3-entry twist-lock bayonet track. | Print face-down on build plate. |
-| **[ullseye-puck-back.stl](file:///D:/gemini/Projects/bullseye/bullseye-puck-back.stl)** | Twist-Lock Rear Lid | 48.4 mm bayonet lid with 3x locking lugs (60-deg twist-lock with solid stop), coin/thumb twist slot, 6x 10.2mm magnet pockets. | Print flat on build plate. |
-| **[ullseye-mount.stl](file:///D:/gemini/Projects/bullseye/bullseye-mount.stl)** | Tool Cradle Mount | 54.6 mm cradle collar (smooth 0.3mm radial docking for 54mm puck), 6x 10.2mm magnet pockets at 60-deg spacing, 4.5 mm wide strap slots. | Print flat on build plate. |
+* **Primary Model:** [`BullsEye.step`](BullsEye.step)
+
+### Components in Assembly
+| Component | Description | Recommended Print Settings |
+| :--- | :--- | :--- |
+| **Puck Top** | Front bezel & main enclosure housing the 1.28" round Waveshare board, display viewport, chin recess, and LiPo chamber. | Print face-down, 0.20mm layer height (0.4mm nozzle), 3–4 walls, 20% infill. |
+| **Puck Lid** | Threaded rear closure lid featuring 6x 10x2mm neodymium magnet pockets and coin twist slot. | Print flat, 0.20mm layer height, 100% infill for magnet solid beds. |
+| **Mount** | Power tool backplate cradle with 6x 10x2mm magnet pockets and dual strap/zip-tie mounting slots. | Print flat, PETG or Tough PLA, 4 walls, 30% infill. |
+
+> Modern slicers (Bambu Studio, OrcaSlicer, PrusaSlicer 2.5+, and Cura) support direct `.step` import, ensuring smooth cylindrical surfaces and precise thread engagement without STL polygonal mesh faceting.
 
 ---
 
@@ -40,7 +44,7 @@ All components are unified into a single parametric model in **SolidCraft** ([`b
 | **Main Puck Board** | Waveshare ESP32-S3-Touch-LCD-1.28 (ESP32-S3R2, 1.28" GC9A01 IPS LCD, CST816S touch, QMI8658 6-axis IMU) | ~$20 – $29 |
 | **Battery** | 3.7V 400mAh – 500mAh LiPo pouch battery (size 502535 with 1.25mm 2-pin JST) | ~$3 – $5 |
 | **Power Switch** | Micro slide switch (SS-12D00 / SS-12F15) inline with battery positive lead | ~$0.50 |
-| **Magnets** | 12x 10x2mm Neodymium disc magnets (6 for puck lid + 6 for drill mount plate) | ~ |
+| **Magnets** | 12x 10x2mm Neodymium disc magnets (6 for puck lid + 6 for drill mount plate) | ~$3 |
 | **Filament** | PETG or Tough PLA | ~$1 |
 
 ---

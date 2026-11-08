@@ -9,7 +9,7 @@ Open-source DIY smart tool interface and digital angle guide. The device magneti
 * **Display:** 1.28-inch round IPS LCD (240x240, 65K colors, GC9A01A via SPI)
 * **Touch Controller:** CST816S capacitive touch (I2C)
 * **IMU (Sensor):** QMI8658 6-axis accelerometer & gyroscope (I2C) with hardware silicon low-pass filter
-* **Battery:** 3.7V 400-500mAh LiPo via onboard MX1.25 connector with ETA6003 charge management
+* **Battery:** 3.7V 400-500mAh LiPo via onboard MX1.25 connector with ETA6003 charge management (40×21×8mm battery bay)
 * **ADC Battery Sense:** GPIO 1 (via 2:1 voltage divider)
 
 ## Hardwired GPIO Pinout
@@ -25,7 +25,9 @@ Open-source DIY smart tool interface and digital angle guide. The device magneti
 2. **Sensor Fusion:** 6-axis Complementary Filter fusing 3-axis gyro angular velocity with accelerometer gravity, backed by QMI8658 hardware silicon LPF.
 3. **Tare / Zeroing:** Touch gesture or tap on screen to set reference plane (e.g. workpiece angled surface).
 4. **Tooling / IDE:** PlatformIO with dual USB and Wi-Fi OTA flash environments.
+5. **CAD / Enclosure:** Primary mechanical enclosure designed in **Autodesk Fusion 360** and tracked canonically as [`BullsEye.step`](BullsEye.step) (`Puck Top`, `Puck Lid`, `Mount`). No raw STL files tracked; modern slicers import STEP directly for full boundary surface fidelity.
 
 ## Current State
 * Hardware tested, fully calibrated, and operational.
 * Wireless OTA flashing functional over local Wi-Fi.
+* Canonical mechanical assembly in `BullsEye.step`.

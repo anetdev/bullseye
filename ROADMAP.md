@@ -31,7 +31,7 @@
 - [x] Add physical power switch cutout (9×5mm slot) on puck wall for inline LiPo switch.
 - [x] Include battery bay for 400mAh LiPo pouch.
 - [x] Design magnetic baseplate and clip mount for Craftsman V20 drill backplate.
-- [x] Export updated printable STLs (`bullseye-full-plate.stl`, `bullseye-puck-front.stl`, `bullseye-puck-back.stl`, `bullseye-mount.stl`).
+- [x] Canonical 3D CAD modeled in Fusion 360 (`BullsEye.step`), replacing legacy STLs.
 - [ ] Print test puck in PETG / PLA.
 
 ## Phase 5: Field Testing & Enhancements
