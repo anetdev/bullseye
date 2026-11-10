@@ -15,7 +15,7 @@
 * **Auto Wall / Bench Detection:** Automatically switches between vertical wall drilling (plumb) and horizontal bench leveling with hysteresis.
 * **6-Axis Sensor Fusion & Silicon LPF:** Fuses 3-axis gyro angular velocity with accelerometer gravity, backed by hardware digital low-pass filtering on the QMI8658 silicon to completely reject motor vibration chatter.
 * **Target Angle Presets:** Fast one-touch presets for standard bevel angles (0°, 15°, 30°, 45°) with green-lock visual alignment within ±0.5°.
-* **One-Touch Tare / Zero:** Calibrate against any angled workpiece or jig with a single tap on the screen.
+* **One-Touch Tare & Persistent Calibration:** Tap anywhere on the screen for temporary relative tare (`TARE ACTIVE`), or tap the top-left `[ CAL ]` button for hands-off desk zeroing saved permanently to Flash NVS.
 * **Fluid Viscosity Damping:** Mineral spirit physics simulation running at 50 FPS on a double-buffered PSRAM DMA sprite for smooth, organic bubble movement.
 * **Smart Power Management:** Auto-dim after 60s, deep sleep after 3 mins of inactivity, and instant wake-on-touch or motion.
 * **Wireless OTA & Setup AP:** Wireless firmware flashing via ArduinoOTA and captive portal Wi-Fi configuration (`DrillPuck-Setup`).
@@ -51,7 +51,11 @@ The primary canonical enclosure is modeled in **Autodesk Fusion 360** and distri
 
 ## Software & Firmware Build
 1. Install [PlatformIO](https://platformio.org/) in VS Code or CLI.
-2. Build and upload via USB:
+2. Build and upload via 1-click automated script (puts ESP32-S3 into ROM bootloader via software without touching physical buttons):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File .\flash.ps1
+   ```
+3. Or manual build and upload via standard PlatformIO CLI:
    ```bash
    pio run -e waveshare_esp32s3_touch_lcd_128 -t upload
    ```

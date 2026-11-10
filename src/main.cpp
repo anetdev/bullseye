@@ -1,8 +1,11 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
+#include <Preferences.h>
 #include <esp_wifi.h>
 #include <esp_bt.h>
+#include <esp_system.h>
+#include <soc/rtc_cntl_reg.h>
 #include <QMI8658.h>
 #include "pin_config.h"
 #include "logo_data.h"
@@ -11,11 +14,25 @@
 // Bullseye — Smart Digital Bullseye Level & Precision Angle Guide
 // Real-Time 3D Bullseye Spirit Level with 6-Axis Gyro Fusion & Silicon LPF
 
+void rebootToBootloader() {
+    Serial.println("[System] Rebooting into ROM Download Bootloader...");
+    delay(100);
+    REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
+    esp_restart();
+}
+
 // --- Display & Layout Constants ---
 constexpr int CENTER_X          = 120;
 constexpr int CENTER_Y          = 120;
 constexpr float BUBBLE_MAX_DIST = 85.0f;
 constexpr int HEADER_Y          = 20;
+
+constexpr int BTN_CAL_X         = 28;
+constexpr int BTN_CAL_Y         = 26;
+constexpr int BTN_CAL_W         = 54;
+constexpr int BTN_CAL_H         = 24;
+constexpr int BTN_CAL_RADIUS    = 12;
+
 constexpr int BTN_PRESET_X      = 152;
 constexpr int BTN_PRESET_Y      = 26;
 constexpr int BTN_PRESET_W      = 60;
@@ -48,6 +65,26 @@ float gyroBiasZ = 0.0f;
 float fusedRoll = 0.0f;
 float fusedPitch = 0.0f;
 bool fusionInitialized = false;
+
+// Persistent Desk Calibration (saved to Flash NVS)
+Preferences prefs;
+bool hasDeskCal = false;
+float deskCalX = 0.0f;
+float deskCalY = 0.0f;
+
+// Calibration State Machine
+enum CalibState {
+    CALIB_IDLE = 0,
+    CALIB_COUNTDOWN,
+    CALIB_SAMPLING,
+    CALIB_SAVED,
+    CALIB_RESET
+};
+CalibState calibState = CALIB_IDLE;
+unsigned long calibStartTime = 0;
+float calibSumX = 0.0f;
+float calibSumY = 0.0f;
+int calibSampleCount = 0;
 
 // Tare offsets (in g's)
 float tareX = 0.0f;
@@ -97,6 +134,86 @@ void wakeFromStandby() {
     Serial.println("[Power] Woke from Standby mode!");
 }
 
+void drawCalibrationOverlay(unsigned long now) {
+    canvas.fillScreen(TFT_BLACK);
+    canvas.setTextDatum(textdatum_t::middle_center);
+
+    if (calibState == CALIB_COUNTDOWN) {
+        int elapsed = (int)(now - calibStartTime);
+        int remainingSec = 3 - (elapsed / 1000);
+        if (remainingSec < 1) remainingSec = 1;
+
+        // Visual guide rings
+        canvas.drawCircle(CENTER_X, CENTER_Y, 75, canvas.color565(40, 60, 90));
+        canvas.drawCircle(CENTER_X, CENTER_Y, 76, canvas.color565(40, 60, 90));
+        canvas.drawCircle(CENTER_X, CENTER_Y, 45, canvas.color565(60, 90, 130));
+
+        // Big countdown number in center
+        char numBuf[8];
+        snprintf(numBuf, sizeof(numBuf), "%d", remainingSec);
+        canvas.setTextColor(TFT_YELLOW);
+        canvas.drawString(numBuf, CENTER_X, CENTER_Y - 2, &fonts::Font4);
+
+        // Header and instructional text
+        canvas.setTextColor(canvas.color565(120, 220, 160));
+        canvas.drawString("DESK CALIBRATION", CENTER_X, 32, &fonts::Font2);
+        canvas.setTextColor(TFT_WHITE);
+        canvas.drawString("PLACE FLAT ON DESK", CENTER_X, 168, &fonts::Font0);
+        canvas.setTextColor(canvas.color565(255, 120, 120));
+        canvas.drawString("HANDS OFF IN 3s!", CENTER_X, 185, &fonts::Font0);
+        canvas.setTextColor(canvas.color565(140, 140, 160));
+        canvas.drawString("(Tap anytime to cancel)", CENTER_X, 203, &fonts::Font0);
+    } else if (calibState == CALIB_SAMPLING) {
+        // Pulsing rings during measurement
+        uint16_t pulseCol = ((now / 200) % 2 == 0) ? TFT_CYAN : canvas.color565(0, 140, 210);
+        canvas.drawCircle(CENTER_X, CENTER_Y, 75, pulseCol);
+        canvas.drawCircle(CENTER_X, CENTER_Y, 76, pulseCol);
+        canvas.drawCircle(CENTER_X, CENTER_Y, 45, pulseCol);
+
+        canvas.setTextColor(TFT_CYAN);
+        canvas.drawString("SAMPLING...", CENTER_X, CENTER_Y - 4, &fonts::Font4);
+
+        canvas.setTextColor(TFT_WHITE);
+        canvas.drawString("DO NOT TOUCH", CENTER_X, 172, &fonts::Font2);
+        canvas.setTextColor(canvas.color565(180, 180, 180));
+        canvas.drawString("Measuring gravity vector...", CENTER_X, 195, &fonts::Font0);
+    } else if (calibState == CALIB_SAVED) {
+        canvas.fillCircle(CENTER_X, CENTER_Y, 55, canvas.color565(0, 70, 30));
+        canvas.drawCircle(CENTER_X, CENTER_Y, 55, TFT_GREEN);
+        canvas.drawCircle(CENTER_X, CENTER_Y, 56, TFT_GREEN);
+
+        canvas.setTextColor(TFT_WHITE);
+        canvas.drawString("SAVED!", CENTER_X, CENTER_Y - 12, &fonts::Font4);
+
+        char offStr[32];
+        float offPitch = asin(constrain(deskCalX, -1.0f, 1.0f)) * (180.0f / M_PI);
+        float offRoll = asin(constrain(-deskCalY, -1.0f, 1.0f)) * (180.0f / M_PI);
+        snprintf(offStr, sizeof(offStr), "X:%+.1f\xF8 Y:%+.1f\xF8", offPitch, offRoll);
+        canvas.setTextColor(canvas.color565(140, 255, 170));
+        canvas.drawString(offStr, CENTER_X, CENTER_Y + 16, &fonts::Font0);
+
+        canvas.setTextColor(TFT_GREEN);
+        canvas.drawString("FLASH NVS UPDATED", CENTER_X, 180, &fonts::Font2);
+        canvas.setTextColor(canvas.color565(180, 220, 180));
+        canvas.drawString("Level is now 0.0\xF8", CENTER_X, 200, &fonts::Font0);
+    } else if (calibState == CALIB_RESET) {
+        canvas.fillCircle(CENTER_X, CENTER_Y, 55, canvas.color565(80, 40, 0));
+        canvas.drawCircle(CENTER_X, CENTER_Y, 55, TFT_ORANGE);
+        canvas.drawCircle(CENTER_X, CENTER_Y, 56, TFT_ORANGE);
+
+        canvas.setTextColor(TFT_WHITE);
+        canvas.drawString("RESET!", CENTER_X, CENTER_Y - 12, &fonts::Font4);
+
+        canvas.setTextColor(TFT_ORANGE);
+        canvas.drawString("FACTORY ZERO", CENTER_X, CENTER_Y + 14, &fonts::Font0);
+
+        canvas.setTextColor(TFT_WHITE);
+        canvas.drawString("Calibration Cleared", CENTER_X, 182, &fonts::Font2);
+    }
+
+    canvas.pushSprite(0, 0);
+}
+
 void setup() {
     Serial.begin(115200);
     pinMode(PIN_TOUCH_INT, INPUT_PULLUP);
@@ -108,7 +225,8 @@ void setup() {
 
     Serial.println("\n========================================");
     Serial.println("         Bullseye Smart Level           ");
-    Serial.println("   Standalone Precision Angle Guide     ");
+    Serial.println("            Drill Straight!             ");
+    Serial.println("              by aNetDev                ");
     Serial.println("========================================");
 
     // 1. Initialize LCD Display
@@ -127,9 +245,11 @@ void setup() {
     canvas.fillScreen(TFT_BLACK);
     canvas.drawJpg(BULLSEYE_LOGO_JPG, BULLSEYE_LOGO_LEN, (240 - 180) / 2, 8);
     canvas.setTextColor(TFT_WHITE);
-    canvas.drawString("Bullseye", CENTER_X, 196, &fonts::Font2);
+    canvas.drawString("Drill Straight!", CENTER_X, 194, &fonts::Font2);
+    canvas.setTextColor(canvas.color565(140, 190, 230));
+    canvas.drawString("by aNetDev", CENTER_X, 210, &fonts::Font0);
     canvas.setTextColor(TFT_CYAN);
-    canvas.drawString("Calibrating IMU...", CENTER_X, 218, &fonts::Font0);
+    canvas.drawString("Calibrating IMU...", CENTER_X, 224, &fonts::Font0);
     canvas.pushSprite(0, 0);
 
     // 3. Initialize Shared I2C Bus & QMI8658 6-Axis IMU
@@ -181,8 +301,20 @@ void setup() {
         Serial.println("[IMU] ERROR: QMI8658 not detected on I2C bus!");
     }
 
+    // 4. Load Persistent Desk Calibration from Flash NVS
+    prefs.begin("bullseye", false);
+    hasDeskCal = prefs.getBool("has_cal", false);
+    if (hasDeskCal) {
+        deskCalX = prefs.getFloat("cal_x", 0.0f);
+        deskCalY = prefs.getFloat("cal_y", 0.0f);
+        Serial.printf("[NVS] Loaded Desk Calibration: offset X=%.4f (pitch), Y=%.4f (roll)\n", deskCalX, deskCalY);
+    } else {
+        Serial.println("[NVS] No saved Desk Calibration found. Using factory zero.");
+    }
+    prefs.end();
+
     lastActivityTime = millis();
-    delay(800);
+    delay(1600);
 }
 
 void loop() {
@@ -198,6 +330,14 @@ void loop() {
     static int cachedBatPct = 0;
 
     unsigned long now = millis();
+
+    // Software Bootloader trigger over Serial (e.g. 'b' or 'F' command)
+    if (Serial.available()) {
+        char c = Serial.read();
+        if (c == 'b' || c == 'B' || c == 'F') {
+            rebootToBootloader();
+        }
+    }
 
     // If in Standby: poll touch and motion at low rate (every 50ms) to save battery
     if (isStandby) {
@@ -339,8 +479,10 @@ void loop() {
             accelPitch_deg = asin(constrain(-fz, -1.0f, 1.0f)) * (180.0f / M_PI);
             totalTilt = sqrt(accelRoll_deg * accelRoll_deg + accelPitch_deg * accelPitch_deg);
         } else {
-            accelRoll_deg = asin(constrain(-fy, -1.0f, 1.0f)) * (180.0f / M_PI);
-            accelPitch_deg = asin(constrain(fx, -1.0f, 1.0f)) * (180.0f / M_PI);
+            float cal_fx = fx - (hasDeskCal ? deskCalX : 0.0f);
+            float cal_fy = fy - (hasDeskCal ? deskCalY : 0.0f);
+            accelRoll_deg = asin(constrain(-cal_fy, -1.0f, 1.0f)) * (180.0f / M_PI);
+            accelPitch_deg = asin(constrain(cal_fx, -1.0f, 1.0f)) * (180.0f / M_PI);
             totalTilt = sqrt(accelRoll_deg * accelRoll_deg + accelPitch_deg * accelPitch_deg);
         }
     }
@@ -364,11 +506,18 @@ void loop() {
     float roll_deg = fusedRoll;
     float pitch_deg = fusedPitch;
 
-    // 4. Touch Gestures:
-    // Top-right button: Cycle Target Presets
-    // Tap elsewhere: Toggle Relative Tare Mode
+    // 4. Touch Gestures & Calibration Triggers:
+    // - Top-Right button: Cycle Target Presets (0°, 15°, 30°, 45°)
+    // - Top-Left CAL button:
+    //     * Short tap: Hands-off Desk Calibration (3s countdown -> save to Flash NVS)
+    //     * Long press (>1.8s): Reset calibration to factory zero
+    // - Center display area:
+    //     * Double-tap: Also triggers Hands-off Desk Calibration
+    //     * Single tap: Toggle temporary Relative Tare Mode
+    //     * Hold (>2.2s): Enter Standby sleep
     static int32_t lastTouchX = 0;
     static int32_t lastTouchY = 0;
+    static unsigned long lastMainTapTime = 0;
 
     int32_t tx = 0, ty = 0;
     bool isTouched = lcd.getTouch(&tx, &ty);
@@ -385,41 +534,128 @@ void loop() {
             touchStartTime = now;
             wasTouched = true;
         } else if (now - touchStartTime > 2200) {
-            // Touch held for > 2.2 seconds -> Put display to sleep manually!
-            enterStandby();
-            wasTouched = false;
-            return;
+            // Touch held for > 2.2 seconds:
+            // If held on CAL button (top-left), don't enter standby - wait for release to trigger CAL reset!
+            if (!(lastTouchX < 105 && lastTouchY < 75)) {
+                enterStandby();
+                wasTouched = false;
+                return;
+            }
         }
     } else if (!isTouched && wasTouched) {
         unsigned long pressDuration = now - touchStartTime;
-        if (pressDuration > 30 && pressDuration <= 2200) {
+
+        if (calibState == CALIB_COUNTDOWN) {
+            // Any tap during the 3-second countdown cancels calibration
+            calibState = CALIB_IDLE;
+            Serial.println("[Calib] Calibration cancelled by user touch.");
+        } else if (calibState == CALIB_IDLE && pressDuration > 30) {
+            // 1. Top-Right: Target Preset Button
             if (lastTouchX > 135 && lastTouchY < 75) {
                 currentPresetIdx = (currentPresetIdx + 1) % NUM_PRESETS;
                 isTared = false;
                 fusionInitialized = false;
                 Serial.printf("[Touch] Preset cycled to: %.1f deg\n", TARGET_PRESETS[currentPresetIdx]);
-            } else {
-                if (isTared) {
-                    isTared = false;
-                    tareX = tareY = tareZ = 0.0f;
+            }
+            // 2. Top-Left: CAL Button
+            else if (lastTouchX < 105 && lastTouchY < 75) {
+                if (pressDuration >= 1800) {
+                    // Long press (>1.8s): Reset calibration back to factory zero
+                    prefs.begin("bullseye", false);
+                    prefs.remove("has_cal");
+                    prefs.remove("cal_x");
+                    prefs.remove("cal_y");
+                    prefs.end();
+                    hasDeskCal = false;
+                    deskCalX = 0.0f;
+                    deskCalY = 0.0f;
                     fusionInitialized = false;
-                    Serial.println("[Touch] Tare cleared -> AUTO MODE.");
+                    calibState = CALIB_RESET;
+                    calibStartTime = now;
+                    Serial.println("[Calib] Desk Calibration erased -> Reverted to factory zero.");
                 } else {
-                    float tareMag = sqrt(fx * fx + fy * fy + fz * fz);
-                    if (tareMag > 0.7f && tareMag < 1.3f) {
-                        isTared = true;
-                        tareX = fx;
-                        tareY = fy;
-                        tareZ = fz;
+                    // Tap: Start Hands-Off Calibration Countdown
+                    calibState = CALIB_COUNTDOWN;
+                    calibStartTime = now;
+                    Serial.println("[Calib] Calibration triggered -> 3s countdown started.");
+                }
+            }
+            // 3. Main Screen Area: Double-Tap (Calibrate) or Single-Tap (Tare)
+            else {
+                if (now - lastMainTapTime < 450) {
+                    // Double-tap detected -> trigger calibration countdown
+                    calibState = CALIB_COUNTDOWN;
+                    calibStartTime = now;
+                    lastMainTapTime = 0;
+                    Serial.println("[Calib] Double-tap detected -> Calibration countdown started.");
+                } else {
+                    lastMainTapTime = now;
+                    if (isTared) {
+                        isTared = false;
+                        tareX = tareY = tareZ = 0.0f;
                         fusionInitialized = false;
-                        Serial.printf("[Touch] Tared to: (%.2f, %.2f, %.2f) | mag: %.2f\n", tareX, tareY, tareZ, tareMag);
+                        Serial.println("[Touch] Tare cleared -> AUTO MODE.");
                     } else {
-                        Serial.printf("[Touch] Tare rejected: invalid gravity vector mag (%.2f)\n", tareMag);
+                        float tareMag = sqrt(fx * fx + fy * fy + fz * fz);
+                        if (tareMag > 0.7f && tareMag < 1.3f) {
+                            isTared = true;
+                            tareX = fx;
+                            tareY = fy;
+                            tareZ = fz;
+                            fusionInitialized = false;
+                            Serial.printf("[Touch] Tared to: (%.2f, %.2f, %.2f) | mag: %.2f\n", tareX, tareY, tareZ, tareMag);
+                        } else {
+                            Serial.printf("[Touch] Tare rejected: invalid gravity vector mag (%.2f)\n", tareMag);
+                        }
                     }
                 }
             }
         }
         wasTouched = false;
+    }
+
+    // Calibration State Machine Processing
+    if (calibState == CALIB_COUNTDOWN) {
+        if (now - calibStartTime >= 3000) {
+            calibState = CALIB_SAMPLING;
+            calibStartTime = now;
+            calibSumX = 0.0f;
+            calibSumY = 0.0f;
+            calibSampleCount = 0;
+            Serial.println("[Calib] Sampling stationary gravity vectors for desk level...");
+        }
+    } else if (calibState == CALIB_SAMPLING) {
+        calibSumX += fx;
+        calibSumY += fy;
+        calibSampleCount++;
+
+        if (now - calibStartTime >= 1200 || calibSampleCount >= 100) {
+            if (calibSampleCount > 10) {
+                deskCalX = calibSumX / (float)calibSampleCount;
+                deskCalY = calibSumY / (float)calibSampleCount;
+                hasDeskCal = true;
+
+                prefs.begin("bullseye", false);
+                prefs.putBool("has_cal", true);
+                prefs.putFloat("cal_x", deskCalX);
+                prefs.putFloat("cal_y", deskCalY);
+                prefs.end();
+
+                fusionInitialized = false;
+                Serial.printf("[Calib] SAVED to NVS: deskCalX=%.4f, deskCalY=%.4f (samples: %d)\n",
+                              deskCalX, deskCalY, calibSampleCount);
+            }
+            calibState = CALIB_SAVED;
+            calibStartTime = now;
+        }
+    } else if (calibState == CALIB_SAVED) {
+        if (now - calibStartTime >= 1800) {
+            calibState = CALIB_IDLE;
+        }
+    } else if (calibState == CALIB_RESET) {
+        if (now - calibStartTime >= 1500) {
+            calibState = CALIB_IDLE;
+        }
     }
 
     // 5. Target Angle & Deviation Calculations
@@ -447,6 +683,11 @@ void loop() {
     // 6. Render Display at 50 FPS (every 20ms) with Fluid Viscosity Simulation
     if (now - lastUpdate >= 20) {
         lastUpdate = now;
+
+        if (calibState != CALIB_IDLE) {
+            drawCalibrationOverlay(now);
+            return;
+        }
 
         // Mineral spirit fluid damping filter
         const float fluidViscosity = 0.22f;
@@ -544,6 +785,22 @@ void loop() {
         canvas.setTextDatum(textdatum_t::middle_left);
         canvas.setTextColor(TFT_WHITE);
         canvas.drawString(btnStr, 175, 38, &fonts::Font0);
+
+        // Top-Left CAL Button
+        uint16_t calBg = hasDeskCal ? canvas.color565(15, 45, 30) : canvas.color565(25, 38, 55);
+        uint16_t calBorder = hasDeskCal ? canvas.color565(40, 140, 75) : canvas.color565(70, 95, 130);
+        canvas.fillRoundRect(BTN_CAL_X, BTN_CAL_Y, BTN_CAL_W, BTN_CAL_H, BTN_CAL_RADIUS, calBg);
+        canvas.drawRoundRect(BTN_CAL_X, BTN_CAL_Y, BTN_CAL_W, BTN_CAL_H, BTN_CAL_RADIUS, calBorder);
+
+        canvas.setTextDatum(textdatum_t::middle_center);
+        if (hasDeskCal) {
+            canvas.setTextColor(canvas.color565(140, 240, 160));
+            canvas.drawString("CAL", BTN_CAL_X + 22, BTN_CAL_Y + 12, &fonts::Font0);
+            canvas.fillCircle(BTN_CAL_X + 41, BTN_CAL_Y + 12, 3, TFT_GREEN);
+        } else {
+            canvas.setTextColor(canvas.color565(160, 200, 240));
+            canvas.drawString("CAL", BTN_CAL_X + (BTN_CAL_W / 2), BTN_CAL_Y + 12, &fonts::Font0);
+        }
 
         // Digital Angle Readout in Center Bottom with Vector Degree Circle °
         char angleStr[16];

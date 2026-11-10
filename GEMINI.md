@@ -23,7 +23,9 @@ Open-source DIY smart tool interface and digital angle guide. The device magneti
 ## Key Architectural Decisions
 1. **Graphics Engine:** LovyanGFX with a 50 FPS double-buffered DMA sprite canvas in PSRAM for mineral spirit fluid viscosity simulation.
 2. **Sensor Fusion:** 6-axis Complementary Filter fusing 3-axis gyro angular velocity with accelerometer gravity, backed by QMI8658 hardware silicon LPF.
-3. **Tare / Zeroing:** Touch gesture or tap on screen to set reference plane (e.g. workpiece angled surface).
+3. **Tare & Persistent Calibration:**
+   * **Relative Tare:** Single tap on the screen to temporarily zero out relative surface angles (`TARE ACTIVE`).
+   * **Persistent NVS Calibration:** Tap top-left `[ CAL ]` button or double-tap screen to trigger a 3-second hands-off countdown. Samples 100 stationary gravity vectors and saves enclosure mounting tilt offsets to ESP32 Flash NVS (`Preferences`), ensuring `DESK LEVEL` reads true `0.0°` across reboots. Long-pressing `[ CAL ]` (>1.8s) resets to factory zero.
 4. **Tooling / IDE:** PlatformIO with dual USB and Wi-Fi OTA flash environments.
 5. **CAD / Enclosure:** Primary mechanical enclosure designed in **Autodesk Fusion 360** and tracked canonically as [`BullsEye.step`](BullsEye.step) (`Puck Top`, `Puck Lid`, `Mount`). No raw STL files tracked; modern slicers import STEP directly for full boundary surface fidelity.
 
