@@ -10,7 +10,7 @@ Open-source DIY smart tool interface and digital angle guide. The device magneti
 * **Touch Controller:** CST816S capacitive touch (I2C)
 * **IMU (Sensor):** QMI8658 6-axis accelerometer & gyroscope (I2C) with hardware silicon low-pass filter
 * **Battery:** 3.7V 400-500mAh LiPo via onboard MX1.25 connector with ETA6003 charge management (40×21×8mm battery bay)
-* **ADC Battery Sense:** GPIO 1 (via 2:1 voltage divider)
+* **ADC Battery Sense:** GPIO 1 (via 3:1 voltage divider: 200kΩ top / 100kΩ bottom)
 
 ## Hardwired GPIO Pinout
 * **Display (GC9A01):** MOSI=GPIO11, SCLK=GPIO10, CS=GPIO9, DC=GPIO8, RST=GPIO14, Backlight=GPIO2

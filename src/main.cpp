@@ -98,8 +98,16 @@ const int NUM_PRESETS = sizeof(TARGET_PRESETS) / sizeof(TARGET_PRESETS[0]);
 int currentPresetIdx = 0; // 0 = 0.0° (Level / Plumb)
 
 float readBatteryVoltage() {
-    uint32_t mv = analogReadMilliVolts(PIN_BATTERY_ADC);
-    return (mv * 2.0f) / 1000.0f;
+    // Waveshare ESP32-S3-Touch-LCD-1.28 has a 3:1 resistor divider (200k top / 100k bottom)
+    // Multi-sample ADC for clean, stable battery voltage reading
+    uint32_t sumMv = 0;
+    constexpr int NUM_SAMPLES = 16;
+    for (int i = 0; i < NUM_SAMPLES; i++) {
+        sumMv += analogReadMilliVolts(PIN_BATTERY_ADC);
+        delayMicroseconds(50);
+    }
+    float avgMv = (float)sumMv / NUM_SAMPLES;
+    return (avgMv * 3.0f) / 1000.0f;
 }
 
 int getBatteryPercent(float v) {
@@ -834,11 +842,19 @@ void loop() {
         }
 
         // Bottom Battery Readout
-        char batStr[24];
-        snprintf(batStr, sizeof(batStr), "%.2fV %d%%", cachedVBat, cachedBatPct);
+        char batStr[32];
+        if (cachedVBat < 3.0f) {
+            snprintf(batStr, sizeof(batStr), "USB (NO BAT)");
+            canvas.setTextColor(canvas.color565(120, 140, 160));
+        } else if (cachedVBat >= 4.16f) {
+            snprintf(batStr, sizeof(batStr), "%.2fV %d%% CHG", cachedVBat, cachedBatPct);
+            canvas.setTextColor(canvas.color565(100, 220, 130)); // Green when charging / full
+        } else {
+            snprintf(batStr, sizeof(batStr), "%.2fV %d%%", cachedVBat, cachedBatPct);
+            canvas.setTextColor(cachedBatPct <= 15 ? TFT_RED : canvas.color565(130, 150, 170));
+        }
         canvas.setTextDatum(textdatum_t::bottom_center);
-        canvas.setTextColor(canvas.color565(130, 150, 170));
-        canvas.drawString(batStr, CENTER_X, 226, &fonts::Font0);
+        canvas.drawString(batStr, CENTER_X, 225, &fonts::Font0);
 
         canvas.pushSprite(0, 0);
     }
